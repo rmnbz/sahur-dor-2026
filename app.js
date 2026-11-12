@@ -1,8 +1,9 @@
+
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-// Publishable key: intended for browser use. Database security must be enforced by RLS.
 const SUPABASE_URL = "https://rslppnagjuczhhkqcedc.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_41I0pcP7yCQ7PBn4-VeyrQ_pUrFg83s";
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const grid = document.getElementById("candidateGrid");
@@ -12,17 +13,46 @@ const submit = document.getElementById("submitVote");
 const loginBtn = document.getElementById("loginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const userLabel = document.getElementById("userLabel");
+
 let selectedId = null;
 let currentUser = null;
 let alreadyVoted = false;
+let isServerMember = false;
+let checkingMembership = false;
 
-function status(message) { statusBox.textContent = message; }
+function status(message) {
+  statusBox.textContent = message;
+}
+
+async function checkMembership() {
+  const { data, error } = await supabase.functions.invoke(
+    "check-discord-membership"
+  );
+
+  if (error) {
+    console.error("Membership verification:", error);
+    return false;
+  }
+
+  return data?.authorized === true;
+}
+
 function renderNominees(rows) {
-  grid.replaceChildren(); choices.replaceChildren();
+  grid.replaceChildren();
+  choices.replaceChildren();
+
   rows.forEach((n) => {
     const card = document.createElement("article");
     card.className = "candidate";
-    card.innerHTML = `<div class="candidate-top"><span class="position"></span><span style="color:#d9ad4b">✦</span></div><h3></h3><p>NOMINÉ AU SAHUR D’OR 2026</p>`;
+    card.innerHTML = `
+      <div class="candidate-top">
+        <span class="position"></span>
+        <span style="color:#d9ad4b">✦</span>
+      </div>
+      <h3></h3>
+      <p>NOMINÉ AU SAHUR D’OR 2026</p>
+    `;
+
     card.querySelector(".position").textContent = n.position;
     card.querySelector("h3").textContent = n.name;
     grid.appendChild(card);
@@ -30,60 +60,174 @@ function renderNominees(rows) {
     const button = document.createElement("button");
     button.className = "choice";
     button.innerHTML = "<b></b><small></small>";
+
     button.querySelector("b").textContent = n.name;
     button.querySelector("small").textContent = n.position;
+
     button.addEventListener("click", () => {
-      if (!currentUser || alreadyVoted) return;
+      if (!currentUser || !isServerMember || alreadyVoted || checkingMembership) {
+        return;
+      }
+
       selectedId = n.id;
-      choices.querySelectorAll(".choice").forEach(x => x.classList.remove("selected"));
+
+      choices.querySelectorAll(".choice").forEach((x) => {
+        x.classList.remove("selected");
+      });
+
       button.classList.add("selected");
       submit.disabled = false;
     });
+
     choices.appendChild(button);
   });
 }
+
 async function loadNominees() {
-  const { data, error } = await supabase.from("nominees").select("id,name,position,display_order").order("display_order");
-  if (error) { status("Impossible de charger les nominés : " + error.message); return; }
+  const { data, error } = await supabase
+    .from("nominees")
+    .select("id,name,position,display_order")
+    .order("display_order");
+
+  if (error) {
+    status("Impossible de charger les nominés : " + error.message);
+    return;
+  }
+
   renderNominees(data || []);
 }
+
 async function refreshSession() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
   currentUser = session?.user || null;
+
   loginBtn.hidden = !!currentUser;
   logoutBtn.hidden = !currentUser;
-  userLabel.textContent = currentUser ? (currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || "Connecté avec Discord") : "";
+
+  userLabel.textContent = currentUser
+    ? currentUser.user_metadata?.full_name ||
+      currentUser.user_metadata?.name ||
+      "Connecté avec Discord"
+    : "";
+
+  selectedId = null;
+  alreadyVoted = false;
+  isServerMember = false;
+  submit.disabled = true;
+
   if (!currentUser) {
-    alreadyVoted = false; selectedId = null; submit.disabled = true;
     status("Connectez-vous avec Discord pour accéder au vote.");
     return;
   }
-  const { data, error } = await supabase.from("votes").select("id").eq("user_id", currentUser.id).maybeSingle();
-  if (error) { status("Connexion active, mais vérification du bulletin impossible : " + error.message); return; }
+
+  checkingMembership = true;
+  status("Vérification de votre appartenance à Bust Academy...");
+
+  isServerMember = await checkMembership();
+  checkingMembership = false;
+
+  if (!isServerMember) {
+    status("Accès refusé : vous devez être membre de Bust Academy pour voter.");
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("votes")
+    .select("id")
+    .eq("user_id", currentUser.id)
+    .maybeSingle();
+
+  if (error) {
+    status("Impossible de vérifier votre bulletin : " + error.message);
+    return;
+  }
+
   alreadyVoted = !!data;
-  submit.disabled = true;
-  status(alreadyVoted ? "Votre vote a déjà été enregistré. Merci pour votre participation !" : "Connecté ! Choisissez votre favori parmi les nominés.");
+
+  status(
+    alreadyVoted
+      ? "Votre vote a déjà été enregistré. Merci pour votre participation !"
+      : "Membre de Bust Academy vérifié ! Choisissez votre favori."
+  );
 }
+
 loginBtn.addEventListener("click", async () => {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "discord",
-    options: { redirectTo: window.location.origin }
+    options: {
+      redirectTo: window.location.origin
+    }
   });
-  if (error) status("Connexion Discord impossible : " + error.message);
-});
-logoutBtn.addEventListener("click", async () => { await supabase.auth.signOut(); });
-submit.addEventListener("click", async () => {
-  if (!currentUser || !selectedId || alreadyVoted) return;
-  submit.disabled = true;
-  const { error } = await supabase.from("votes").insert({ user_id: currentUser.id, nominee_id: selectedId });
+
   if (error) {
-    status(error.code === "23505" ? "Un vote existe déjà pour ce compte Discord." : "Vote non enregistré : " + error.message);
+    status("Connexion Discord impossible : " + error.message);
+  }
+});
+
+logoutBtn.addEventListener("click", async () => {
+  await supabase.auth.signOut();
+  currentUser = null;
+  isServerMember = false;
+  selectedId = null;
+  submit.disabled = true;
+  await refreshSession();
+});
+
+submit.addEventListener("click", async () => {
+  if (
+    !currentUser ||
+    !selectedId ||
+    alreadyVoted ||
+    !isServerMember ||
+    checkingMembership
+  ) {
+    return;
+  }
+
+  submit.disabled = true;
+  status("Nouvelle vérification de votre appartenance au serveur...");
+
+  const stillMember = await checkMembership();
+
+  if (!stillMember) {
+    isServerMember = false;
+    selectedId = null;
+    status("Vote refusé : vous n'êtes pas membre de Bust Academy.");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("votes")
+    .insert({
+      user_id: currentUser.id,
+      nominee_id: selectedId
+    });
+
+  if (error) {
+    status(
+      error.code === "23505"
+        ? "Un vote existe déjà pour ce compte Discord."
+        : "Vote non enregistré : " + error.message
+    );
+
     submit.disabled = false;
     return;
   }
+
   alreadyVoted = true;
-  status("Votre vote est bien enregistré. Les résultats restent secrets jusqu'à la cérémonie !");
+  selectedId = null;
+
+  status(
+    "Votre vote est bien enregistré. Les résultats restent secrets jusqu'à la cérémonie !"
+  );
 });
-supabase.auth.onAuthStateChange(() => { refreshSession(); });
+
+supabase.auth.onAuthStateChange(() => {
+  refreshSession();
+});
+
 await loadNominees();
 await refreshSession();
