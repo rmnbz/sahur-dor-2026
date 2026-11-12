@@ -5,28 +5,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SAHUR D’OR 2026 — La cérémonie</title>
-<meta name="description" content="Votez pour le Sahur d’Or 2026. Une récompense, douze nominés.">
-
+<meta name="description" content="Votez pour le Sahur d’Or 2026.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-
 <header class="topbar">
   <a class="brand" href="#">
     <span class="brand-mark">✦</span>
     <span>SAHUR <b>D’OR</b><small>ÉDITION 2026</small></span>
   </a>
-
   <nav>
     <a href="#accueil">Accueil</a>
     <a href="#nomines">Les nominés</a>
     <a href="#vote">Voter</a>
     <a href="#ceremonie">La cérémonie</a>
   </nav>
-
   <div class="account">
     <span id="userLabel"></span>
     <button class="discord-btn" id="loginBtn">◉ Se connecter avec Discord</button>
@@ -35,22 +31,18 @@
 </header>
 
 <main>
-
 <section class="hero" id="accueil">
   <div class="hero-copy">
     <div class="eyebrow">ÉDITION 2026 <span>•</span> LA RÉCOMPENSE ULTIME</div>
     <h1>QUI REMPORTERA<br>LE <em>SAHUR D’OR</em> ?</h1>
     <p>Une récompense. Douze nominés. Un seul lauréat.<br>À vous de désigner la personnalité de la saison.</p>
-
     <div class="facts">
       <span>🏆 <b>12 nominés</b></span>
-      <span>♟ <b>Ouvert à tous les membres</b></span>
+      <span>♟ <b>Communauté Bust Academy</b></span>
       <span>🔒 <b>Résultats secrets</b></span>
     </div>
-
     <a class="gold-btn" href="#vote">Accéder au vote <span>→</span></a>
   </div>
-
   <div class="trophy-wrap">
     <div class="halo"></div>
     <div class="trophy">🏆</div>
@@ -67,7 +59,6 @@
     </div>
     <span></span>
   </div>
-
   <p class="section-intro">Découvrez les douze joueurs en lice pour le trophée.</p>
   <div id="candidateGrid" class="candidate-grid"></div>
 </section>
@@ -76,79 +67,66 @@
   <div class="vote-panel">
     <div class="eyebrow">À VOUS DE DÉCIDER</div>
     <h2>UN NOM. <em>UN VOTE.</em></h2>
-
     <p>Connectez-vous avec Discord, puis choisissez votre favori. Votre vote sera définitif.</p>
-
-    <div class="vote-status" id="voteStatus" role="status">
-      Chargement de la connexion…
-    </div>
-
+    <div class="vote-status" id="voteStatus" role="status">Chargement de la connexion…</div>
     <div id="voteChoices" class="vote-choices"></div>
-
     <button class="gold-btn wide" id="submitVote" disabled>
       Valider mon vote <span>→</span>
     </button>
-
-    <small class="disclaimer">
-      Les résultats restent confidentiels jusqu'à la cérémonie.
-    </small>
+    <small class="disclaimer">Les résultats restent confidentiels jusqu'à la cérémonie.</small>
   </div>
 </section>
 
-<!-- PANNEAU ADMINISTRATEUR -->
+<!-- ADMINISTRATION -->
 <section id="adminPanel" hidden style="
-  max-width:900px;
-  margin:70px auto;
-  padding:35px;
-  border:1px solid #8e6a2c;
-  border-radius:12px;
-  background:#171512;
-  text-align:center;
+  max-width:900px;margin:70px auto;padding:35px;
+  border:1px solid #8e6a2c;border-radius:12px;
+  background:#171512;text-align:center;
 ">
   <div class="eyebrow">ESPACE SÉCURISÉ</div>
-
-  <h2 style="margin:12px 0;color:#f1c75b;">
-    ADMINISTRATION DU SCRUTIN
-  </h2>
-
+  <h2 style="margin:12px 0;color:#f1c75b;">ADMINISTRATION DU SCRUTIN</h2>
   <p>Gestion de l'ouverture et de la fermeture des votes.</p>
 
-  <div id="adminVoteStatus" class="vote-status" role="status">
-    Chargement du statut du scrutin…
-  </div>
+  <div id="adminVoteStatus" class="vote-status" role="status">Chargement...</div>
 
-  <div style="
-    display:flex;
-    justify-content:center;
-    flex-wrap:wrap;
-    gap:15px;
-    margin-top:25px;
-  ">
-    <button
-      id="openVotesBtn"
-      class="gold-btn"
-      type="button"
-    >
-      OUVRIR LES VOTES
-    </button>
-
-    <button
-      id="closeVotesBtn"
-      class="gold-btn"
-      type="button"
-      style="background:#721f1f;color:white;"
-    >
-      FERMER LES VOTES
-    </button>
+  <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:15px;margin-top:25px;">
+    <button id="openVotesBtn" class="gold-btn" type="button">OUVRIR LES VOTES</button>
+    <button id="closeVotesBtn" class="gold-btn" type="button" style="background:#721f1f;color:white;">FERMER LES VOTES</button>
   </div>
 
   <p id="adminMessage" role="status" style="margin-top:20px;"></p>
 
-  <small class="disclaimer">
-    Les modifications sont enregistrées dans la base de données sécurisée.
-  </small>
+  <hr style="border-color:#8e6a2c;margin:30px 0;">
+
+  <div class="eyebrow">SOIRÉE DE CÉRÉMONIE</div>
+  <h2 style="color:#f1c75b;">RÉVÉLATION DES RÉSULTATS</h2>
+  <p id="adminRevealStatus">Résultats actuellement secrets.</p>
+
+  <button id="revealResultsBtn" class="gold-btn" type="button">
+    🏆 RÉVÉLER LES RÉSULTATS
+  </button>
+  <p id="revealMessage" role="status"></p>
 </section>
-<!-- FIN DU PANNEAU ADMINISTRATEUR -->
+
+<!-- RÉSULTATS PUBLICS -->
+<section id="resultsSection" hidden style="
+  max-width:1000px;margin:80px auto;padding:30px 20px;
+  text-align:center;
+">
+  <div class="eyebrow">LE VERDICT EST TOMBÉ</div>
+  <h2 style="font-size:clamp(35px,6vw,65px);color:#f1c75b;">
+    LE PALMARÈS DU <em>SAHUR D’OR 2026</em>
+  </h2>
+  <p>La communauté a rendu son verdict.</p>
+
+  <div id="podium" style="
+    display:flex;align-items:end;justify-content:center;
+    flex-wrap:wrap;gap:15px;margin:45px auto;
+  "></div>
+
+  <h2 style="color:#f1c75b;margin-top:60px;">LE CLASSEMENT COMPLET</h2>
+  <div id="resultsList" style="margin-top:25px;"></div>
+</section>
 
 <section class="ceremony" id="ceremonie">
   <div>
@@ -156,13 +134,11 @@
     <h2>LA CÉRÉMONIE DU <em>SAHUR D’OR</em></h2>
     <p>La révélation du grand gagnant sera annoncée sur Discord.</p>
   </div>
-
   <div class="ceremony-time">
     <strong>DATE À CONFIRMER</strong>
     <span>Heure à confirmer</span>
   </div>
 </section>
-
 </main>
 
 <footer>
@@ -172,6 +148,5 @@
 </footer>
 
 <script type="module" src="app.js"></script>
-
 </body>
 </html>
