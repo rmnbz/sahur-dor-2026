@@ -21,15 +21,24 @@ const adminMessage = document.getElementById("adminMessage");
 const openVotesBtn = document.getElementById("openVotesBtn");
 const closeVotesBtn = document.getElementById("closeVotesBtn");
 
+const adminRevealStatus = document.getElementById("adminRevealStatus");
+const revealResultsBtn = document.getElementById("revealResultsBtn");
+const revealMessage = document.getElementById("revealMessage");
+const resultsSection = document.getElementById("resultsSection");
+const podium = document.getElementById("podium");
+const resultsList = document.getElementById("resultsList");
+
 let selectedId = null;
 let currentUser = null;
 let alreadyVoted = false;
 let isServerMember = false;
 let checkingMembership = false;
 let votingOpen = true;
+let resultsRevealed = false;
 let refreshInFlight = null;
 let membershipInFlight = null;
 let updatingSettings = false;
+let revealingResults = false;
 
 function status(message) {
   statusBox.textContent = message;
@@ -47,11 +56,27 @@ async function loadVoteSettings() {
     .single();
 
   if (error || !data) {
-    console.error("Erreur réglages des votes :", error);
+    console.error("Erreur réglages votes :", error);
     return false;
   }
 
   votingOpen = data.voting_open === true;
+  return true;
+}
+
+async function loadCeremonySettings() {
+  const { data, error } = await supabase
+    .from("ceremony_settings")
+    .select("results_revealed")
+    .eq("id", true)
+    .single();
+
+  if (error || !data) {
+    console.error("Erreur réglages cérémonie :", error);
+    return false;
+  }
+
+  resultsRevealed = data.results_revealed === true;
   return true;
 }
 
@@ -69,40 +94,131 @@ function updateAdminDisplay() {
 
   openVotesBtn.disabled = votingOpen || updatingSettings;
   closeVotesBtn.disabled = !votingOpen || updatingSettings;
+
+  adminRevealStatus.textContent = resultsRevealed
+    ? "🏆 Les résultats ont été officiellement révélés."
+    : "🔒 Les résultats sont encore secrets.";
+
+  revealResultsBtn.disabled =
+    votingOpen || resultsRevealed || revealingResults;
+
+  revealResultsBtn.textContent = resultsRevealed
+    ? "RÉSULTATS DÉJÀ RÉVÉLÉS"
+    : "🏆 RÉVÉLER LES RÉSULTATS";
 }
 
-async function changeVotingStatus(open) {
-  if (!isAdmin() || updatingSettings) return;
+async function checkMembership() {
+  if (membershipInFlight) return membershipInFlight;
 
-  updatingSettings = true;
-  openVotesBtn.disabled = true;
-  closeVotesBtn.disabled = true;
-  adminMessage.textContent = "Enregistrement en cours...";
+  membershipInFlight = (async () => {
+    const { data, error } = await supabase.functions.invoke(
+      "check-discord-membership"
+    );
 
-  const { error } = await supabase
-    .from("vote_settings")
-    .update({ voting_open: open })
-    .eq("id", true);
+    if (error) {
+      console.error("Membership verification:", error);
+      return false;
+    }
+
+    return data?.authorized === true;
+  })();
+
+  try {
+    return await membershipInFlight;
+  } finally {
+    membershipInFlight = null;
+  }
+}
+
+async function loadResults() {
+  const { data, error } = await supabase.rpc("get_ceremony_results");
 
   if (error) {
-    console.error("Erreur modification scrutin :", error);
-    adminMessage.textContent = "Erreur : " + error.message;
-  } else {
-    adminMessage.textContent = open
-      ? "Les votes sont maintenant ouverts."
-      : "Les votes sont maintenant fermés.";
-
-    await loadVoteSettings();
-    await refreshVoteStatus();
+    console.error("Erreur résultats :", error);
+    resultsSection.hidden = true;
+    return;
   }
 
-  updatingSettings = false;
-  updateAdminDisplay();
+  if (!data || data.length === 0) {
+    resultsSection.hidden = false;
+    podium.textContent = "Aucun vote enregistré.";
+    resultsList.replaceChildren();
+    return;
+  }
+
+  resultsSection.hidden = false;
+  podium.replaceChildren();
+  resultsList.replaceChildren();
+
+  const medals = ["🥇", "🥈", "🥉"];
+  const podiumColors = ["#d9ad4b", "#bfc4ca", "#b77b45"];
+
+  data.slice(0, 3).forEach((candidate, index) => {
+    const card = document.createElement("div");
+
+    card.style.cssText = `
+      flex:1;
+      min-width:180px;
+      max-width:260px;
+      padding:25px 15px;
+      background:#171512;
+      border:1px solid ${podiumColors[index]};
+      border-radius:12px;
+      color:white;
+      text-align:center;
+    `;
+
+    const medal = document.createElement("div");
+    medal.style.fontSize = "38px";
+    medal.textContent = medals[index];
+
+    const rank = document.createElement("h3");
+    rank.style.color = podiumColors[index];
+    rank.textContent = ["1ER", "2E", "3E"][index];
+
+    const name = document.createElement("h2");
+    name.textContent = candidate.nominee_name;
+
+    const position = document.createElement("p");
+    position.textContent = candidate.nominee_position;
+
+    const votes = document.createElement("strong");
+    votes.textContent = `${candidate.vote_count} vote(s)`;
+
+    card.append(medal, rank, name, position, votes);
+    podium.appendChild(card);
+  });
+
+  data.forEach((candidate, index) => {
+    const row = document.createElement("div");
+
+    row.style.cssText = `
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:15px;
+      margin:8px 0;
+      background:#171512;
+      border:1px solid #5b4727;
+      border-radius:8px;
+      color:white;
+      text-align:left;
+    `;
+
+    const name = document.createElement("span");
+    name.textContent = `${index + 1}. ${candidate.nominee_name} — ${candidate.nominee_position}`;
+
+    const votes = document.createElement("strong");
+    votes.style.color = "#d9ad4b";
+    votes.textContent = `${candidate.vote_count} voix`;
+
+    row.append(name, votes);
+    resultsList.appendChild(row);
+  });
 }
 
 async function refreshVoteStatus() {
-  if (!currentUser) return;
-
   const loaded = await loadVoteSettings();
 
   if (!loaded) {
@@ -130,32 +246,98 @@ async function refreshVoteStatus() {
     button.disabled = !isServerMember || alreadyVoted;
   });
 
-  if (!alreadyVoted && isServerMember) {
+  if (isServerMember && !alreadyVoted) {
     status("Membre de Bust Academy vérifié ! Choisissez votre favori.");
   }
 }
 
-async function checkMembership() {
-  if (membershipInFlight) return membershipInFlight;
+async function changeVotingStatus(open) {
+  if (!isAdmin() || updatingSettings) return;
 
-  membershipInFlight = (async () => {
-    const { data, error } = await supabase.functions.invoke(
-      "check-discord-membership"
-    );
+  updatingSettings = true;
+  updateAdminDisplay();
+  adminMessage.textContent = "Enregistrement en cours...";
 
-    if (error) {
-      console.error("Membership verification:", error);
-      return false;
-    }
+  const { error } = await supabase
+    .from("vote_settings")
+    .update({ voting_open: open })
+    .eq("id", true);
 
-    return data?.authorized === true;
-  })();
+  if (error) {
+    adminMessage.textContent = "Erreur : " + error.message;
+  } else {
+    adminMessage.textContent = open
+      ? "Les votes sont maintenant ouverts."
+      : "Les votes sont maintenant fermés.";
 
-  try {
-    return await membershipInFlight;
-  } finally {
-    membershipInFlight = null;
+    await loadVoteSettings();
+    await refreshVoteStatus();
   }
+
+  updatingSettings = false;
+  updateAdminDisplay();
+}
+
+async function revealResults() {
+  if (!isAdmin() || revealingResults || resultsRevealed) return;
+
+  if (votingOpen) {
+    revealMessage.textContent =
+      "Ferme d'abord le scrutin avant de révéler les résultats.";
+    return;
+  }
+
+  const confirmed = confirm(
+    "ATTENTION : cette action va révéler publiquement les résultats du Sahur d'Or 2026. Continuer ?"
+  );
+
+  if (!confirmed) return;
+
+  revealingResults = true;
+  updateAdminDisplay();
+  revealMessage.textContent = "Vérification et révélation en cours...";
+
+  const settingsLoaded = await loadVoteSettings();
+
+  if (!settingsLoaded || votingOpen) {
+    revealMessage.textContent =
+      "Impossible de révéler : le scrutin doit être fermé.";
+    revealingResults = false;
+    updateAdminDisplay();
+    return;
+  }
+
+  const { error } = await supabase
+    .from("ceremony_settings")
+    .update({ results_revealed: true })
+    .eq("id", true);
+
+  if (error) {
+    revealMessage.textContent = "Erreur : " + error.message;
+    revealingResults = false;
+    updateAdminDisplay();
+    return;
+  }
+
+  await loadCeremonySettings();
+
+  if (!resultsRevealed) {
+    revealMessage.textContent =
+      "La révélation n'a pas pu être confirmée.";
+    revealingResults = false;
+    updateAdminDisplay();
+    return;
+  }
+
+  await loadResults();
+
+  revealMessage.textContent =
+    "🏆 Les résultats du Sahur d'Or 2026 sont maintenant publics !";
+
+  revealingResults = false;
+  updateAdminDisplay();
+
+  resultsSection.scrollIntoView({ behavior: "smooth" });
 }
 
 function renderNominees(rows) {
@@ -180,8 +362,8 @@ function renderNominees(rows) {
 
     const button = document.createElement("button");
     button.className = "choice";
-    button.innerHTML = "<b></b><small></small>";
     button.type = "button";
+    button.innerHTML = "<b></b><small></small>";
 
     button.querySelector("b").textContent = n.name;
     button.querySelector("small").textContent = n.position;
@@ -248,6 +430,18 @@ async function refreshSession() {
     submit.disabled = true;
 
     updateAdminDisplay();
+
+    const ceremonyLoaded = await loadCeremonySettings();
+
+    if (!ceremonyLoaded) {
+      console.error("Impossible de charger la configuration cérémonie.");
+    }
+
+    if (resultsRevealed) {
+      await loadResults();
+    } else {
+      resultsSection.hidden = true;
+    }
 
     if (!currentUser) {
       adminPanel.hidden = true;
@@ -322,9 +516,7 @@ loginBtn.addEventListener("click", async () => {
     }
   });
 
-  if (error) {
-    status("Connexion Discord impossible : " + error.message);
-  }
+  if (error) status("Connexion Discord impossible : " + error.message);
 });
 
 logoutBtn.addEventListener("click", async () => {
@@ -343,10 +535,12 @@ openVotesBtn.addEventListener("click", () => {
 });
 
 closeVotesBtn.addEventListener("click", () => {
-  if (confirm("Confirmer la fermeture définitive du scrutin pour le moment ?")) {
+  if (confirm("Confirmer la fermeture des votes ?")) {
     changeVotingStatus(false);
   }
 });
+
+revealResultsBtn.addEventListener("click", revealResults);
 
 submit.addEventListener("click", async () => {
   if (
@@ -361,9 +555,7 @@ submit.addEventListener("click", async () => {
   const nomineeId = selectedId;
   const userId = currentUser.id;
 
-  if (!confirm("Ton vote sera définitif. Confirmer ton choix ?")) {
-    return;
-  }
+  if (!confirm("Ton vote sera définitif. Confirmer ton choix ?")) return;
 
   submit.disabled = true;
   status("Nouvelle vérification de votre appartenance au serveur...");
@@ -399,7 +591,6 @@ submit.addEventListener("click", async () => {
         ? "Un vote existe déjà pour ce compte Discord."
         : "Vote non enregistré : " + error.message
     );
-
     submit.disabled = false;
     return;
   }
