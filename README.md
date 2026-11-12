@@ -24,3 +24,5 @@
 - Les résultats ne sont pas affichés par le site. Les votes restent lisibles uniquement par leur propriétaire grâce aux politiques RLS.
 - Les secrets Discord et la clé `service_role` ne doivent jamais être placés dans le navigateur.
 - Le projet doit être testé sur l'URL réellement autorisée dans Supabase avant l'ouverture des votes.
+
+Mise à jour du déploiement Vercel.
